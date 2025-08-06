@@ -5,7 +5,7 @@ Contributors: your-wordpress-org-username
 Tags: ai, content, seo, openai, gpt, writer, generator, post, dark mode, content tools
 Requires at least: 5.8
 Tested up to: 6.5
-Stable tag: 2.0.0
+Stable tag: 2.0.2
 License: GPLv2 or later
 License URI: [https://www.gnu.org/licenses/gpl-2.0.html](https://www.gnu.org/licenses/gpl-2.0.html)
 
@@ -51,6 +51,12 @@ Yes, this plugin requires an API key from OpenAI. You can get one by signing up 
 3.  The sleek settings page for the API key.
 
 == Changelog ==
+
+= 2.0.2 =
+* **FIX:** Added aggressive CSS specificity to force dark theme over default admin styles.
+
+= 2.0.1 =
+* **FIX:** Added higher specificity CSS selectors to ensure the dark theme overrides default WordPress admin styles.
 
 = 2.0.0 =
 * **MAJOR UPDATE:** Full experience overhaul.
