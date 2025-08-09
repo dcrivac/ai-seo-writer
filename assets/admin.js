@@ -1,3 +1,10 @@
+/*
+  File: assets/admin.js
+  Theme: Tijuana After Midnight
+  Version: 3.1.0 (Multi-LLM Update)
+*/
+
+
 jQuery(document).ready(function($) {
     'use strict';
 
