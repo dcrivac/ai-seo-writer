@@ -3,7 +3,7 @@
  * Plugin Name:       AI SEO Writer
  * Description:       A full-suite, multi-model content platform. Generate, refine, repurpose, and link articles with your choice of AI, all within a unique, dark-mode interface.
  * Version:           3.1.2
- * Author:            Your Name
+ * Author:            David Kenji Crivac
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       ai-seo-writer
