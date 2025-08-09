@@ -1,17 +1,12 @@
-/*
- * File: assets/admin.css
- * Theme: Tijuana After Midnight
- * Version: 3.1.2 (Multi-LLM Update)
- * Plugin Name:       AI SEO Writer
- * Description:       A full-suite, multi-model content platform. Generate, refine, repurpose, and link articles with your choice of AI, all within a unique, dark-mode interface.
- * Version:           3.1.2
- * Author:            David Kenji Crivac
- * License:           GPL-2.0-or-later
- * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       ai-seo-writer
+/**
+ * File: admin.css
+ *
+ * Handles all the custom styling for the AI SEO Writer admin interface,
+ * creating the "Tijuana After Midnight" dark theme.
+ *
+ * @package AI_SEO_Writer
+ * @version 3.1.3
  */
-
-*/
 
 /* --- Global & Dark Theme --- */
 .toplevel_page_ai_seo_writer, .ai-writer_page_ai_seo_writer_settings {
