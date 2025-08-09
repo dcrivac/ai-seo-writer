@@ -1,9 +1,11 @@
 <?php
 /**
  * Plugin Name:       AI SEO Writer
+ * Plugin URI:        https://yourwebsite.com/ai-seo-writer
  * Description:       A full-suite, multi-model content platform. Generate, refine, repurpose, and link articles with your choice of AI, all within a unique, dark-mode interface.
- * Version:           3.1.2
- * Author:            David Kenji Crivac
+ * Version:           3.1.3
+ * Author:            Your Name
+ * Author URI:        https://yourwebsite.com
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       ai-seo-writer
@@ -46,7 +48,7 @@ function aisw_gemini_api_key_field_callback() {
     echo '<input type="password" name="aisw_gemini_api_key" value="' . esc_attr( $api_key ) . '" class="regular-text" placeholder="AIzaSy...">';
 }
 
-// --- 2. Main Page HTML Structure (RESTORED) ---
+// --- 2. Main Page HTML Structure ---
 function aisw_main_page_html() {
     ?>
     <div class="wrap aisw-wrap">
@@ -139,8 +141,8 @@ function aisw_enqueue_admin_scripts( $hook ) {
     $css_url = plugin_dir_url( __FILE__ ) . 'assets/admin.css';
     $js_url = plugin_dir_url( __FILE__ ) . 'assets/admin.js';
 
-    $css_version = file_exists($css_path) ? filemtime($css_path) : '3.1.2';
-    $js_version = file_exists($js_path) ? filemtime($js_path) : '3.1.2';
+    $css_version = file_exists($css_path) ? filemtime($css_path) : '3.1.3';
+    $js_version = file_exists($js_path) ? filemtime($js_path) : '3.1.3';
 
     wp_enqueue_style( 'aisw-admin-css', $css_url, [], $css_version );
     wp_enqueue_script( 'aisw-admin-js', $js_url, [ 'jquery' ], $js_version, true );
@@ -152,7 +154,7 @@ function aisw_enqueue_admin_scripts( $hook ) {
 }
 add_action( 'admin_enqueue_scripts', 'aisw_enqueue_admin_scripts' );
 
-// --- 4. AJAX Handlers (RESTORED) ---
+// --- 4. AJAX Handlers ---
 
 // Main API handler for both OpenAI and Gemini
 function aisw_call_llm_api( $prompt, $model = 'default', $max_tokens = 1500 ) {
