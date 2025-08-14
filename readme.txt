@@ -1,9 +1,12 @@
+/**
+ * File: readme.txt
+ */
 === AI SEO Writer ===
 Contributors: your-wordpress-org-username
 Tags: ai, content, seo, bulk generator, content repurposing, internal linking, openai, gpt, gemini
 Requires at least: 5.8
 Tested up to: 6.5
-Stable tag: 3.1.0
+Stable tag: 3.1.4
 License: GPLv2 or later
 License URI: [https://www.gnu.org/licenses/gpl-2.0.html](https://www.gnu.org/licenses/gpl-2.0.html)
 
@@ -40,20 +43,10 @@ This is the ultimate tool for scaling your content production, all wrapped in ou
 
 == Changelog ==
 
-= 3.1.0 =
-* **FEATURE:** Added support for Google Gemini API.
-* **FEATURE:** New settings page to select default model and add separate API keys.
-* **FEATURE:** Added on-the-fly model selector to the Single Post generator.
-* Re-engineered backend to handle multiple LLM APIs.
-* Updated UI and CSS for new selection options.
+= 3.1.4 =
+* **FIX:** Re-consolidated all files and provided a clean-room build process to fix installation errors.
 
-= 3.0.0 =
-* **POWER PACK UPDATE:** Transformed the plugin into a full content suite.
-* **NEW:** Added "Barracuda Bulk" generation mode.
-* **NEW:** Added "Content Refinery" to repurpose existing posts.
-* **NEW:** Added "SmartLink" AI-powered internal linking to the Tune-Up panel.
-* Completely redesigned the UI with a tabbed interface.
-* Overhauled PHP and JS to support all new features.
-
-= 1.0.0 =
-* Initial release.
+= 3.1.3 =
+* **DOCS:** Added header comment blocks to `admin.js` and `admin.css` for better documentation.
+* **DOCS:** Updated `readme.txt` to match the current version.
+* **FIX:** Replaced the plugin header comment block in the main PHP file to resolve potential parsing errors during deployment.

@@ -1,9 +1,6 @@
-
-/*
-  File: assets/admin.css
-  Theme: Tijuana After Midnight
-  Version: 3.1.0 (Multi-LLM Update)
-*/
+/**
+ * File: assets/admin.css
+ */
 
 /* --- Global & Dark Theme --- */
 .toplevel_page_ai_seo_writer, .ai-writer_page_ai_seo_writer_settings {
@@ -16,16 +13,16 @@
 
 /* --- Header & Tabs --- */
 .aisw-header h1 { color: #fff !important; border-bottom: 2px solid var(--aisw-accent1); padding-bottom: 10px; }
-.nav-tab-wrapper { border-bottom-color: var(--aisw-border); }
+.nav-tab-wrapper { border-bottom-color: var(--aisw-border); margin-bottom: 0; }
 .nav-tab { background: var(--aisw-light-bg); border-color: var(--aisw-border); color: var(--aisw-text) !important; }
 .nav-tab-active, .nav-tab-active:hover { background: var(--aisw-dark-bg); border-bottom-color: var(--aisw-dark-bg); color: var(--aisw-accent1) !important; }
-.tab-content .tab-pane { display: none; padding-top: 10px; }
+.tab-content .tab-pane { display: none; }
 .tab-content .tab-pane.active { display: block; }
 
 /* --- Main App Container --- */
 #aisw-generator-app, #aisw-bulk-app, #aisw-refinery-app, .aisw-settings-form {
     background-color: var(--aisw-light-bg); border: 1px solid var(--aisw-border);
-    padding: 25px; margin-top: 25px; max-width: 800px; border-radius: 5px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    padding: 25px; margin-top: 0; max-width: 800px; border-radius: 0 0 5px 5px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); border-top: none;
 }
 .form-group { margin-bottom: 25px; position: relative; }
 
