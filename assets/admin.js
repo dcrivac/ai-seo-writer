@@ -1,6 +1,3 @@
-/**
- * File: assets/admin.js
- */
 jQuery(document).ready(function($) {
     'use strict';
 
@@ -19,6 +16,7 @@ jQuery(document).ready(function($) {
     const progressDiv = $('#aisw-live-progress'), editPostLink = $('#edit-post-link');
     const llmSelector = $('#llm-selector');
     let currentPostId = null;
+    let currentPostData = {};
 
     const progressSteps = ['Analyzing topic...', 'Crafting headline...', 'Building outline...', 'Writing introduction...', 'Fleshing out points...', 'Finalizing...'];
     let progressInterval;
@@ -46,6 +44,8 @@ jQuery(document).ready(function($) {
                 currentPostId = response.data.post_id;
                 editPostLink.attr('href', response.data.edit_link);
                 step1.fadeOut(() => step2.fadeIn());
+                // Trigger initial SEO analysis
+                $('#focus-keyword').trigger('keyup');
             } else { alert('Error: ' + response.data.message); generateBtn.prop('disabled', false); }
         }).fail(() => { alert('An unexpected error occurred.'); generateBtn.prop('disabled', false); })
         .always(() => stopProgress());
@@ -81,10 +81,45 @@ jQuery(document).ready(function($) {
         step2.fadeOut(() => {
             topicInput.val(''); $('#article-audience').val('');
             $('.tuneup-module textarea, .tuneup-module .output-box').val('').html('');
+            $('#focus-keyword').val('');
+            $('#seo-checklist').empty();
             generateBtn.prop('disabled', false);
             step1.fadeIn();
         });
     });
+
+    // --- SEO ANALYSIS SUITE ---
+    $('#focus-keyword').on('keyup', debounce(function() {
+        const keyword = $(this).val().toLowerCase();
+        const checklist = $('#seo-checklist');
+        checklist.empty();
+
+        if (!keyword) return;
+
+        // In a real plugin, you'd fetch post title and content via AJAX
+        // For this demo, we'll simulate it.
+        const postTitle = topicInput.val().toLowerCase(); 
+        const postContent = "Simulated content about " + postTitle; // This would be the real content
+        const metaDesc = $('#meta-output').val().toLowerCase();
+
+        // 1. Keyword in Title
+        let titleCheck = postTitle.includes(keyword);
+        checklist.append(`<li class="${titleCheck ? 'pass' : 'fail'}">Focus Keyword in Title</li>`);
+
+        // 2. Keyword in Meta
+        let metaCheck = metaDesc.includes(keyword);
+        checklist.append(`<li class="${metaCheck ? 'pass' : 'fail'}">Focus Keyword in Meta Description <button class="button-link tuneup-btn" data-action="generate_meta">Generate</button></li>`);
+
+        // 3. Keyword Density (simplified)
+        const density = (postContent.split(keyword).length - 1);
+        let densityCheck = density > 1 && density < 5;
+        checklist.append(`<li class="${densityCheck ? 'pass' : 'fail'}">Keyword Density (${density} found)</li>`);
+
+        // 4. Internal Links
+        checklist.append(`<li class="info">Internal Links <button class="button-link tuneup-btn" data-action="find_links">Find Links</button></li>`);
+        
+    }, 500));
+
 
     // --- BARRACUDA BULK ---
     const startBulkBtn = $('#start-bulk-btn'), bulkKeywords = $('#bulk-keywords');
@@ -100,15 +135,20 @@ jQuery(document).ready(function($) {
         keywords.forEach(k => bulkQueueList.append(`<li data-keyword="${k.trim()}"><span>QUEUED</span> ${k.trim()}</li>`));
         bulkProgress.fadeIn();
 
-        $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_start_bulk', nonce: aisw_ajax_obj.nonce, keywords: bulkKeywords.val() })
-        .done(() => processNextInBulkQueue());
+        $.post(aisw_ajax_obj.ajax_url, { 
+            action: 'aisw_start_bulk', 
+            nonce: aisw_ajax_obj.nonce, 
+            keywords: bulkKeywords.val(),
+            length: $('#bulk-length').val(),
+            format: $('#bulk-format').val()
+        }).done(() => processNextInBulkQueue());
     });
 
     function processNextInBulkQueue() {
         const nextItem = bulkQueueList.find('li:contains("QUEUED"):first');
         if (!nextItem.length) {
             isBulkRunning = false;
-            startBulkBtn.prop('disabled', false).text('Unleash Barracuda');
+            startBulkBtn.prop('disabled', false).text('Start Bulk Generation');
             bulkQueueList.append('<li><span>COMPLETE</span> All tasks finished.</li>');
             return;
         }
@@ -173,4 +213,4 @@ jQuery(document).ready(function($) {
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
     }
-});
+	});

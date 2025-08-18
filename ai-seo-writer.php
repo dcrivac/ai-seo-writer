@@ -5,11 +5,11 @@
 
 /**
  * Plugin Name:       AI SEO Writer
- * Plugin URI:        https://github.com/dcrivac/ai-seo-writer
- * Description:       A full-suite, multi-model content platform. Generate, refine, repurpose, and link articles with your choice of AI, all within a unique, dark-mode interface.
- * Version:           3.1.4
- * Author:            David Crivac
- * Author URI:        https://github.com/dcrivac
+ * Plugin URI:        https://yourwebsite.com/ai-seo-writer
+ * Description:       A full-suite, multi-model content platform with an integrated SEO optimizer.
+ * Version:           3.4.0
+ * Author:            Your Name
+ * Author URI:        https://yourwebsite.com
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       ai-seo-writer
@@ -25,22 +25,39 @@ function aisw_add_admin_menu() {
 add_action( 'admin_menu', 'aisw_add_admin_menu' );
 
 function aisw_settings_init() {
+    // Register settings
     register_setting( 'ai_seo_writer_settings_group', 'aisw_openai_api_key' );
     register_setting( 'ai_seo_writer_settings_group', 'aisw_gemini_api_key' );
     register_setting( 'ai_seo_writer_settings_group', 'aisw_default_llm' );
-    add_settings_section('aisw_settings_section', 'API Key Settings', 'aisw_settings_section_callback', 'ai_seo_writer_settings');
-    add_settings_field('aisw_default_llm_field', 'Default AI Model', 'aisw_default_llm_field_callback', 'ai_seo_writer_settings', 'aisw_settings_section');
-    add_settings_field('aisw_openai_api_key_field', 'OpenAI API Key', 'aisw_openai_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_settings_section');
-    add_settings_field('aisw_gemini_api_key_field', 'Google Gemini API Key', 'aisw_gemini_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_settings_section');
+    register_setting( 'ai_seo_writer_settings_group', 'aisw_theme_selector' );
+
+    // Theme Settings Section
+    add_settings_section('aisw_theme_settings_section', 'Theme Settings', null, 'ai_seo_writer_settings');
+    add_settings_field('aisw_theme_selector_field', 'Select Theme', 'aisw_theme_selector_field_callback', 'ai_seo_writer_settings', 'aisw_theme_settings_section');
+
+    // API Settings Section
+    add_settings_section('aisw_api_settings_section', 'API Key Settings', 'aisw_api_settings_section_callback', 'ai_seo_writer_settings');
+    add_settings_field('aisw_default_llm_field', 'Default AI Model', 'aisw_default_llm_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
+    add_settings_field('aisw_openai_api_key_field', 'OpenAI API Key', 'aisw_openai_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
+    add_settings_field('aisw_gemini_api_key_field', 'Google Gemini API Key', 'aisw_gemini_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
 }
 add_action( 'admin_init', 'aisw_settings_init' );
 
-function aisw_settings_section_callback() { echo '<p>Select your default model and enter the required API keys.</p>'; }
+function aisw_theme_selector_field_callback() {
+    $current_theme = get_option( 'aisw_theme_selector', 'dark' );
+    echo '<select name="aisw_theme_selector">';
+    echo '<option value="dark"' . selected( $current_theme, 'dark', false ) . '>Tijuana After Midnight (Dark)</option>';
+    echo '<option value="light"' . selected( $current_theme, 'light', false ) . '>Wabi-Sabi (Light)</option>';
+    echo '</select>';
+}
+
+function aisw_api_settings_section_callback() { echo '<p>Select your default model and enter the required API keys.</p>'; }
 function aisw_default_llm_field_callback() {
-    $default_llm = get_option( 'aisw_default_llm', 'openai' );
+    $default_llm = get_option( 'aisw_default_llm', 'gpt-5' );
     echo '<select name="aisw_default_llm">';
-    echo '<option value="openai"' . selected($default_llm, 'openai', false) . '>OpenAI (GPT-3.5 Turbo)</option>';
-    echo '<option value="gemini"' . selected($default_llm, 'gemini', false) . '>Google (Gemini 1.5 Flash)</option>';
+    echo '<option value="gpt-5"' . selected($default_llm, 'gpt-5', false) . '>OpenAI (GPT-5)</option>';
+    echo '<option value="gemini-2.5-flash"' . selected($default_llm, 'gemini-2.5-flash', false) . '>Google (Gemini 2.5 Flash)</option>';
+    echo '<option value="gemini-2.5-pro"' . selected($default_llm, 'gemini-2.5-pro', false) . '>Google (Gemini 2.5 Pro)</option>';
     echo '</select>';
 }
 function aisw_openai_api_key_field_callback() {
@@ -63,7 +80,7 @@ function aisw_main_page_html() {
 
         <nav class="nav-tab-wrapper">
             <a href="#single-post" class="nav-tab nav-tab-active">Single Post</a>
-            <a href="#bulk-generate" class="nav-tab">Barracuda Bulk</a>
+            <a href="#bulk-generate" class="nav-tab">Bulk Generator</a>
             <a href="#content-refinery" class="nav-tab">Content Refinery</a>
         </nav>
 
@@ -78,19 +95,29 @@ function aisw_main_page_html() {
                         <div class="aisw-controls-grid aisw-controls-grid-3">
                             <div class="form-group"><label for="article-tone">Tone</label><select id="article-tone"><option value="Professional">Professional</option><option value="Casual" selected>Casual</option><option value="Witty">Witty</option><option value="Bold">Bold</option></select></div>
                             <div class="form-group"><label for="article-audience">Target Audience</label><input type="text" id="article-audience" placeholder="e.g., Music lovers, audiophiles"></div>
-                            <div class="form-group"><label for="llm-selector">AI Model</label><select id="llm-selector"><option value="default">Default Model</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></div>
+                            <div class="form-group"><label for="llm-selector">AI Model</label><select id="llm-selector"><option value="default">Default Model</option><option value="gpt-5">OpenAI (GPT-5)</option><option value="gemini-2.5-flash">Google (Gemini 2.5 Flash)</option><option value="gemini-2.5-pro">Google (Gemini 2.5 Pro)</option></select></div>
                         </div>
                         <button id="generate-article-btn" class="button button-primary">Generate</button>
                         <div id="aisw-live-progress" style="display:none;"></div>
                     </div>
                     <div id="aisw-step-2-tuneup" style="display:none;">
-                        <h2 class="aisw-tuneup-title">Tijuana Tune-Up</h2>
-                        <p class="aisw-tuneup-subtitle">Draft created. Now, let's perfect and enhance it.</p>
+                        <h2 class="aisw-tuneup-title">Optimization Suite</h2>
+                        <p class="aisw-tuneup-subtitle">Draft created. Now, let's optimize and enhance it.</p>
                         <div class="aisw-tuneup-grid">
-                            <div class="tuneup-module"><h3>Meta Description</h3><p>Generate a concise summary for search engines.</p><button class="button tuneup-btn" data-action="generate_meta">Generate Meta</button><textarea id="meta-output" readonly></textarea></div>
-                            <div class="tuneup-module"><h3>SEO Tags</h3><p>Generate 5-7 relevant tags for your post.</p><button class="button tuneup-btn" data-action="generate_tags">Suggest Tags</button><div id="tags-output" class="output-box"></div></div>
-                            <div class="tuneup-module"><h3>Social Teaser</h3><p>Generate a punchy tweet to promote this article.</p><button class="button tuneup-btn" data-action="generate_social">Create Teaser</button><textarea id="social-output" readonly></textarea></div>
-                            <div class="tuneup-module"><h3>SmartLink Internal Linking</h3><p>Scan for relevant internal linking opportunities.</p><button class="button tuneup-btn" data-action="find_links">Find Links</button><div id="links-output" class="output-box"></div></div>
+                            <div class="tuneup-module seo-module">
+                                <h3>SEO Analysis & Optimization</h3>
+                                <div class="form-group">
+                                    <label for="focus-keyword">Focus Keyword</label>
+                                    <input type="text" id="focus-keyword" placeholder="Enter primary keyword">
+                                </div>
+                                <ul id="seo-checklist" class="seo-checklist"></ul>
+                            </div>
+                            <div class="tuneup-module">
+                                <h3>Social Teaser</h3>
+                                <p>Generate a punchy tweet to promote this article.</p>
+                                <button class="button tuneup-btn" data-action="generate_social">Create Teaser</button>
+                                <textarea id="social-output" readonly></textarea>
+                            </div>
                         </div>
                         <div class="aisw-finish-buttons"><a href="#" id="edit-post-link" class="button button-primary" target="_blank">Finish & Edit Post</a><button id="start-over-btn" class="button button-secondary">Start Over</button></div>
                     </div>
@@ -98,9 +125,27 @@ function aisw_main_page_html() {
             </div>
             <div id="bulk-generate" class="tab-pane">
                 <div id="aisw-bulk-app">
-                    <p>Enter up to 20 keywords or titles, one per line. The plugin will create a draft for each using your default AI model.</p>
+                    <p>Enter up to 20 keywords or titles, one per line. The plugin will create a draft for each.</p>
+                    <div class="aisw-controls-grid">
+                        <div class="form-group">
+                            <label for="bulk-length">Content Length</label>
+                            <select id="bulk-length">
+                                <option value="short">Short Post (~300 words)</option>
+                                <option value="medium" selected>Medium Post (~800 words)</option>
+                                <option value="long">Long Analysis (1500+ words)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="bulk-format">Output Format</label>
+                            <select id="bulk-format">
+                                <option value="blog" selected>Standard Blog Post</option>
+                                <option value="faq">FAQ Page</option>
+                                <option value="product">Product Description</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="form-group"><label for="bulk-keywords">Keywords / Titles</label><textarea id="bulk-keywords" rows="10" placeholder="The History of Chicano Park Murals&#10;Best Surf Spots in Rosarito&#10;A Guide to Tijuana's Craft Beer Scene"></textarea></div>
-                    <button id="start-bulk-btn" class="button button-primary">Unleash Barracuda</button>
+                    <button id="start-bulk-btn" class="button button-primary">Start Bulk Generation</button>
                     <div id="bulk-progress-container" style="display:none;"><h3>Generation Queue</h3><ul id="bulk-queue-list"></ul></div>
                 </div>
             </div>
@@ -135,7 +180,7 @@ function aisw_settings_page_html() {
     <?php
 }
 
-// --- 3. Enqueue Scripts & Styles (ROBUST VERSION) ---
+// --- 3. Enqueue Scripts & Styles ---
 function aisw_enqueue_admin_scripts( $hook ) {
     if ( strpos($hook, 'ai_seo_writer') === false ) return;
 
@@ -151,20 +196,31 @@ function aisw_enqueue_admin_scripts( $hook ) {
 }
 add_action( 'admin_enqueue_scripts', 'aisw_enqueue_admin_scripts' );
 
+// --- Add Theme Class to Body ---
+function aisw_add_admin_body_class($classes) {
+    if (isset($_GET['page']) && strpos($_GET['page'], 'ai_seo_writer') !== false) {
+        $theme = get_option('aisw_theme_selector', 'dark');
+        $classes .= ' aisw-theme-' . esc_attr($theme);
+    }
+    return $classes;
+}
+add_filter('admin_body_class', 'aisw_add_admin_body_class');
+
+
 // --- 4. AJAX Handlers ---
 
 // Main API handler for both OpenAI and Gemini
 function aisw_call_llm_api( $prompt, $model = 'default', $max_tokens = 1500 ) {
     if ($model === 'default') {
-        $model = get_option('aisw_default_llm', 'openai');
+        $model = get_option('aisw_default_llm', 'gpt-5');
     }
 
-    if ($model === 'openai') {
+    if ($model === 'gpt-5') {
         $api_key = get_option('aisw_openai_api_key');
         if (empty($api_key)) return new WP_Error('api_key_missing', 'OpenAI API Key is not set.');
         
         $api_url = 'https://api.openai.com/v1/chat/completions';
-        $body = ['model' => 'gpt-3.5-turbo', 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7, 'max_tokens' => $max_tokens];
+        $body = ['model' => 'gpt-5', 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7, 'max_tokens' => $max_tokens];
         $headers = ['Authorization' => 'Bearer ' . $api_key, 'Content-Type' => 'application/json'];
         $response = wp_remote_post($api_url, ['headers' => $headers, 'body' => json_encode($body), 'timeout' => 120]);
         if (is_wp_error($response)) return $response;
@@ -172,18 +228,26 @@ function aisw_call_llm_api( $prompt, $model = 'default', $max_tokens = 1500 ) {
         if (isset($response_data['error'])) return new WP_Error('api_error', $response_data['error']['message']);
         return $response_data['choices'][0]['message']['content'];
 
-    } elseif ($model === 'gemini') {
+    } elseif ($model === 'gemini-2.5-flash' || $model === 'gemini-2.5-pro') {
         $api_key = get_option('aisw_gemini_api_key');
         if (empty($api_key)) return new WP_Error('api_key_missing', 'Gemini API Key is not set.');
 
-        $api_url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' . $api_key;
+        $gemini_model_id = ($model === 'gemini-2.5-pro') ? 'gemini-2.5-pro-preview-05-20' : 'gemini-2.5-flash-preview-05-20';
+        $api_url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $gemini_model_id . ':generateContent?key=' . $api_key;
         $body = ['contents' => [['parts' => [['text' => $prompt]]]]];
         $headers = ['Content-Type' => 'application/json'];
         $response = wp_remote_post($api_url, ['headers' => $headers, 'body' => json_encode($body), 'timeout' => 120]);
         if (is_wp_error($response)) return $response;
         $response_data = json_decode(wp_remote_retrieve_body($response), true);
         if (isset($response_data['error'])) return new WP_Error('api_error', $response_data['error']['message']);
-        return $response_data['candidates'][0]['content']['parts'][0]['text'];
+        
+        $text_response = $response_data['candidates'][0]['content']['parts'][0]['text'];
+        $cleaned_response = trim($text_response);
+        if (substr($cleaned_response, 0, 7) === '```json') {
+            $cleaned_response = substr($cleaned_response, 7);
+            $cleaned_response = rtrim($cleaned_response, '`');
+        }
+        return $cleaned_response;
     }
     return new WP_Error('invalid_model', 'Invalid AI model selected.');
 }
@@ -260,30 +324,49 @@ function aisw_handle_start_bulk() {
     check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
     $keywords = explode("\n", trim($_POST['keywords']));
     $keywords = array_slice(array_filter(array_map('sanitize_text_field', $keywords)), 0, 20);
-    set_transient('aisw_bulk_queue', $keywords, HOUR_IN_SECONDS);
+    $length = sanitize_text_field($_POST['length']);
+    $format = sanitize_text_field($_POST['format']);
+
+    $bulk_data = [
+        'queue' => $keywords,
+        'length' => $length,
+        'format' => $format
+    ];
+
+    set_transient('aisw_bulk_data', $bulk_data, HOUR_IN_SECONDS);
     wp_send_json_success(['message' => 'Queue started.']);
 }
 add_action( 'wp_ajax_aisw_start_bulk', 'aisw_handle_start_bulk' );
 
 function aisw_handle_process_bulk_queue() {
     check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
-    $queue = get_transient('aisw_bulk_queue');
-    if (empty($queue)) {
+    $bulk_data = get_transient('aisw_bulk_data');
+    if (empty($bulk_data['queue'])) {
+        delete_transient('aisw_bulk_data');
         wp_send_json_success(['status' => 'complete']);
         return;
     }
-    $keyword = array_shift($queue);
-    set_transient('aisw_bulk_queue', $queue, HOUR_IN_SECONDS);
-    $prompt = "Write a comprehensive, SEO-optimized blog post about \"{$keyword}\". Format output as a valid JSON object: {\"title\": \"...\", \"body\": \"...\"}";
+
+    $keyword = array_shift($bulk_data['queue']);
+    $length = $bulk_data['length'];
+    $format = $bulk_data['format'];
+    set_transient('aisw_bulk_data', $bulk_data, HOUR_IN_SECONDS);
+
+    $length_map = ['short' => '~300 words', 'medium' => '~800 words', 'long' => '1500+ words'];
+    $format_map = ['blog' => 'a standard blog post', 'faq' => 'an FAQ page', 'product' => 'a product description'];
+
+    $prompt = "Write a comprehensive, SEO-optimized piece of content about \"{$keyword}\". The desired length is {$length_map[$length]} and the format should be {$format_map[$format]}. Format output as a valid JSON object: {\"title\": \"...\", \"body\": \"...\"}";
+    
     $ai_response_json = aisw_call_llm_api($prompt);
+    
     if (!is_wp_error($ai_response_json)) {
         $content = json_decode($ai_response_json, true);
         if (json_last_error() === JSON_ERROR_NONE && isset($content['title'])) {
             wp_insert_post(['post_title' => sanitize_text_field($content['title']), 'post_content' => wp_kses_post($content['body']), 'post_status' => 'draft', 'post_author' => get_current_user_id()]);
-            wp_send_json_success(['status' => 'processing', 'keyword' => $keyword, 'remaining' => count($queue)]);
+            wp_send_json_success(['status' => 'processing', 'keyword' => $keyword, 'remaining' => count($bulk_data['queue'])]);
             return;
         }
     }
-    wp_send_json_error(['status' => 'error', 'keyword' => $keyword, 'remaining' => count($queue)]);
+    wp_send_json_error(['status' => 'error', 'keyword' => $keyword, 'remaining' => count($bulk_data['queue'])]);
 }
 add_action( 'wp_ajax_aisw_process_bulk_queue', 'aisw_handle_process_bulk_queue' );
