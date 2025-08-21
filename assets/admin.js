@@ -213,4 +213,179 @@ jQuery(document).ready(function($) {
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
     }
+
+    // --- MOBILE API KEY GENERATOR (Settings Page) ---
+    $('#aisw_generate_mobile_key').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).text('Generating...');
+        const expires_in_days = parseInt($('#aisw_mobile_api_expiry').val() || '0', 10);
+        const scopes = $('.aisw-scope:checked').map(function() { return $(this).val(); }).get();
+        $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_generate_mobile_key', nonce: aisw_ajax_obj.nonce, expires_in_days: expires_in_days, scopes: scopes })
+        .done(response => {
+            if (response.success && response.data.token) {
+                $('#aisw_mobile_api_key').val(response.data.token);
+                // copy to clipboard
+                navigator.clipboard.writeText(response.data.token).then(() => {
+                    alert('Mobile API key generated and copied to clipboard. Store it somewhere safe.');
+                }).catch(() => {
+                    alert('Mobile API key generated. Copy it now: ' + response.data.token);
+                });
+                // append new token row to tokens table
+                if (response.data.token_id) {
+                    const tid = response.data.token_id;
+                    const createdAt = response.data.created_at || '';
+                    const createdBy = response.data.created_by || '';
+                    const expiresAt = response.data.expires_at || 'Never';
+                    const scopesText = response.data.scopes ? response.data.scopes.join(', ') : 'all';
+                    // columns: Token ID | Created | Created By | Expires | Scopes | Last Used | Last Used IP | Last Used By | Actions
+                    const newRow = $(`<tr data-token-id="${tid}"><td>${tid}</td><td>${createdAt}</td><td>${createdBy}</td><td>${expiresAt}</td><td>${scopesText}</td><td></td><td></td><td></td><td><button type="button" class="button aisw-rotate-token">Rotate</button> <button type="button" class="button aisw-revoke-token">Revoke</button></td></tr>`);
+                    $('#aisw_tokens_list').prepend(newRow);
+                }
+            } else {
+                alert('Failed to generate key.');
+            }
+        }).fail(() => { alert('An unexpected error occurred.'); })
+        .always(() => btn.prop('disabled', false).text('Generate New Token'));
+    });    // Token action handler (revoke / rotate) using shared modal
+    let aisw_pending_action = null;
+    $(document).on('click', '.aisw-revoke-token', function() {
+        const row = $(this).closest('tr');
+        const tokenId = row.data('token-id');
+        aisw_pending_action = { type: 'revoke', tokenId: tokenId, row: row };
+        $('#aisw_revoke_modal_title').text('Revoke Token');
+        $('#aisw_revoke_modal_text').text('Are you sure you want to revoke token ' + tokenId + '? This action cannot be undone.');
+        updateModalDetails(row);
+        $('#aisw_revoke_confirm').text('Revoke');
+        $('#aisw_revoke_modal').addClass('aisw-modal--open');
+    });
+
+    // Modal cancel
+    $(document).on('click', '#aisw_revoke_cancel', function() {
+        aisw_pending_action = null;
+        $('#aisw_revoke_modal').removeClass('aisw-modal--open');
+    });
+
+    // Modal confirm (handles revoke and rotate)
+    $(document).on('click', '#aisw_revoke_confirm', function() {
+        if (!aisw_pending_action) return;
+        const action = aisw_pending_action.type;
+        const tokenId = aisw_pending_action.tokenId;
+        const row = aisw_pending_action.row;
+
+        if (action === 'revoke') {
+            const btn = row.find('.aisw-revoke-token');
+            btn.prop('disabled', true).text('Revoking...');
+            $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_revoke_mobile_token', nonce: aisw_ajax_obj.nonce, token_id: tokenId })
+            .done(response => {
+                if (response.success) {
+                    row.fadeOut(() => row.remove());
+                } else {
+                    alert('Failed to revoke token: ' + (response.data && response.data.message ? response.data.message : 'unknown'));
+                    btn.prop('disabled', false).text('Revoke');
+                }
+            }).fail(() => { alert('Unexpected error'); btn.prop('disabled', false).text('Revoke'); })
+            .always(() => {
+                aisw_pending_action = null;
+               $('#aisw_revoke_modal').removeClass('aisw-modal--open');
+            });
+            return;
+        }
+
+        if (action === 'rotate') {
+            const btn = row.find('.aisw-rotate-token');
+            btn.prop('disabled', true).text('Rotating...');
+            $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_rotate_mobile_token', nonce: aisw_ajax_obj.nonce, token_id: tokenId })
+            .done(response => {
+                if (response.success && response.data.token) {
+                    $('#aisw_mobile_api_key').val(response.data.token);
+                    navigator.clipboard.writeText(response.data.token).then(() => {
+                        alert('Token rotated and new key copied to clipboard.');
+                    }).catch(() => alert('Token rotated. Copy it now: ' + response.data.token));
+                    // optionally update rotated_at cell or other UI bits
+                } else {
+                    alert('Failed to rotate token: ' + (response.data && response.data.message ? response.data.message : 'unknown'));
+                }
+            }).fail(() => alert('Unexpected error'))
+            .always(() => {
+                btn.prop('disabled', false).text('Rotate');
+                aisw_pending_action = null;
+               $('#aisw_revoke_modal').removeClass('aisw-modal--open');
+            });
+            return;
+        }
+
+        // unknown action fallback
+        aisw_pending_action = null;
+        $('#aisw_revoke_modal').removeClass('aisw-modal--open');
+    });
+
+    // Rotate token handler (open modal)
+    $(document).on('click', '.aisw-rotate-token', function() {
+        const row = $(this).closest('tr');
+        const tokenId = row.data('token-id');
+        aisw_pending_action = { type: 'rotate', tokenId: tokenId, row: row };
+        $('#aisw_revoke_modal_title').text('Rotate Token');
+        $('#aisw_revoke_modal_text').text('Rotate token ' + tokenId + '? This will invalidate the previous token and return a new one.');
+        updateModalDetails(row);
+        $('#aisw_revoke_confirm').text('Rotate');
+        $('#aisw_revoke_modal').addClass('aisw-modal--open');
+    });
+
+    // Refresh tokens list
+    $('#aisw_refresh_tokens').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).text('Refreshing...');
+        $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_get_mobile_tokens', nonce: aisw_ajax_obj.nonce })
+        .done(response => {
+            if (response.success && Array.isArray(response.data)) {
+                const tbody = $('#aisw_tokens_list');
+                tbody.empty();
+                if (response.data.length === 0) {
+                    tbody.append('<tr><td colspan="8">No mobile API tokens created.</td></tr>');
+                } else {
+                    response.data.forEach(t => {
+                        const scopesText = t.scopes ? t.scopes.join(', ') : 'all';
+                        const row = $(`<tr data-token-id="${t.token_id}"><td>${t.token_id}</td><td>${t.created_at}</td><td>${t.created_by}</td><td>${t.expires_at || 'Never'}</td><td>${scopesText}</td><td>${t.last_used_at || ''}</td><td>${t.last_used_ip || ''}</td><td>${t.last_used_by || ''}</td><td><button type="button" class="button aisw-rotate-token">Rotate</button> <button type="button" class="button aisw-revoke-token">Revoke</button></td></tr>`);
+                        tbody.append(row);
+                    });
+                }
+            } else {
+                alert('Failed to refresh tokens.');
+            }
+        }).fail(() => alert('Unexpected error')).always(() => btn.prop('disabled', false).text('Refresh'));
+    });
+
+    // Prune expired tokens
+    $('#aisw_prune_tokens').on('click', function() {
+        const btn = $(this);
+        if (!confirm('Are you sure you want to permanently delete all expired tokens?')) return;
+        btn.prop('disabled', true).text('Pruning...');
+        $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_prune_expired_tokens', nonce: aisw_ajax_obj.nonce })
+        .done(response => {
+            if (response.success) {
+                alert(response.data.pruned_count + ' expired tokens were pruned.');
+                $('#aisw_refresh_tokens').trigger('click'); // Refresh the list
+            } else {
+                alert('Failed to prune tokens: ' + (response.data && response.data.message ? response.data.message : 'unknown'));
+            }
+        }).fail(() => alert('Unexpected error'))
+        .always(() => btn.prop('disabled', false).text('Prune Expired'));
+    });
+
+    function updateModalDetails(row) {
+        const detailsContainer = $('.aisw-modal__details');
+        if (!row || !row.length) {
+            detailsContainer.empty().hide();
+            return;
+        }
+        const expires = row.find('td').eq(3).text() || 'N/A';
+        const lastUsed = row.find('td').eq(4).text() || 'Never';
+        const lastUsedIp = row.find('td').eq(5).text() || 'N/A';
+
+        const detailsHtml = `
+            <strong>Expires:</strong> ${expires}<br>
+            <strong>Last Used:</strong> ${lastUsed} (IP: ${lastUsedIp})
+        `;
+        detailsContainer.html(detailsHtml).show();
+    }
 	});

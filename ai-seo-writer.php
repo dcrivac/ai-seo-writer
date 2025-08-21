@@ -7,7 +7,16 @@
  * Plugin Name:       AI SEO Writer
  * Plugin URI:        https://yourwebsite.com/ai-seo-writer
  * Description:       A full-suite, multi-model content platform with an integrated SEO optimizer.
- * Version:           3.4.0
+ * Version:       // AJAX: Prune expired mobile API tokens
+function aisw_ajax_prune_expired_tokens() {
+    if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( ['message' => 'Unauthorized'] );
+    check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
+    $pruned_count = aisw_perform_token_pruning();
+    if ($pruned_count > 0) {
+        aisw_log_token_pruning($pruned_count, 'manual');
+    }
+    wp_send_json_success( ['pruned_count' => $pruned_count] );
+}
  * Author:            Your Name
  * Author URI:        https://yourwebsite.com
  * License:           GPL-2.0-or-later
@@ -29,6 +38,8 @@ function aisw_settings_init() {
     register_setting( 'ai_seo_writer_settings_group', 'aisw_openai_api_key' );
     register_setting( 'ai_seo_writer_settings_group', 'aisw_gemini_api_key' );
     register_setting( 'ai_seo_writer_settings_group', 'aisw_default_llm' );
+    // store multiple hashed mobile tokens as an associative array
+    register_setting( 'ai_seo_writer_settings_group', 'aisw_mobile_api_tokens' );
     register_setting( 'ai_seo_writer_settings_group', 'aisw_theme_selector' );
 
     // Theme Settings Section
@@ -40,6 +51,8 @@ function aisw_settings_init() {
     add_settings_field('aisw_default_llm_field', 'Default AI Model', 'aisw_default_llm_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
     add_settings_field('aisw_openai_api_key_field', 'OpenAI API Key', 'aisw_openai_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
     add_settings_field('aisw_gemini_api_key_field', 'Google Gemini API Key', 'aisw_gemini_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
+    add_settings_field('aisw_mobile_api_key_field', 'Mobile API Key', 'aisw_mobile_api_key_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
+    add_settings_field('aisw_audit_log_field', 'Audit Log', 'aisw_audit_log_field_callback', 'ai_seo_writer_settings', 'aisw_api_settings_section');
 }
 add_action( 'admin_init', 'aisw_settings_init' );
 
@@ -68,6 +81,220 @@ function aisw_gemini_api_key_field_callback() {
     $api_key = get_option( 'aisw_gemini_api_key' );
     echo '<input type="password" name="aisw_gemini_api_key" value="' . esc_attr( $api_key ) . '" class="regular-text" placeholder="AIzaSy...">';
 }
+
+function aisw_mobile_api_key_field_callback() {
+    $tokens = get_option( 'aisw_mobile_api_tokens', array() );
+
+    echo '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">';
+    echo '<input type="text" id="aisw_mobile_api_key" value="" class="regular-text" readonly placeholder="(will display new key here)" />';
+    echo '<select id="aisw_mobile_api_expiry" style="margin-left:8px;">
+            <option value="0">Never expires</option>
+            <option value="30">Expires in 30 days</option>
+            <option value="90" selected>Expires in 90 days</option>
+            <option value="180">Expires in 180 days</option>
+        </select>';
+    echo '<button type="button" id="aisw_generate_mobile_key" class="button">Generate New Token</button>';
+    echo '<button type="button" id="aisw_refresh_tokens" class="button">Refresh</button>';
+    echo '<button type="button" id="aisw_prune_tokens" class="button">Prune Expired</button>';
+    echo '</div>';
+    echo '<div id="aisw_mobile_api_scopes" style="margin: 10px 0;">
+            <strong>Scopes:</strong>
+            <label><input type="checkbox" class="aisw-scope" value="generate" checked> Generate</label>
+            <label><input type="checkbox" class="aisw-scope" value="refine" checked> Refine</label>
+            <label><input type="checkbox" class="aisw-scope" value="posts" checked> Posts</label>
+          </div>';
+
+    echo '<p class="description">Tokens are hashed and stored; the plaintext token is shown only once when generated. Revoke tokens to disable them.</p>';
+
+    echo '<table class="widefat fixed" style="margin-top:12px;">';
+        echo '<thead><tr><th>Token ID</th><th>Created</th><th>Created By</th><th>Expires</th><th>Scopes</th><th>Last Used</th><th>Last Used IP</th><th>Last Used By</th><th>Actions</th></tr></thead><tbody id="aisw_tokens_list">';
+    if ( empty( $tokens ) ) {
+            echo '<tr><td colspan="8">No mobile API tokens created.</td></tr>';
+    } else {
+        foreach ( $tokens as $tid => $meta ) {
+            $created = isset($meta['created_at']) ? esc_html($meta['created_at']) : '';
+            $expires = isset($meta['expires_at']) && $meta['expires_at'] ? esc_html($meta['expires_at']) : 'Never';
+            $scopes = isset($meta['scopes']) && is_array($meta['scopes']) ? implode(', ', $meta['scopes']) : 'all';
+            $by = isset($meta['created_by']) ? get_userdata($meta['created_by']) : null;
+            $by_name = $by ? esc_html( $by->display_name ) : 'Unknown';
+                $last_used = isset($meta['last_used_at']) ? esc_html($meta['last_used_at']) : '';
+                $last_used_ip = isset($meta['last_used_ip']) ? esc_html($meta['last_used_ip']) : '';
+                $last_used_by = isset($meta['last_used_by']) && $meta['last_used_by'] ? get_userdata($meta['last_used_by']) : null;
+                $last_used_by_name = $last_used_by ? esc_html($last_used_by->display_name) : (isset($meta['last_used_by']) && $meta['last_used_by'] ? esc_html($meta['last_used_by']) : '');
+                echo '<tr data-token-id="' . esc_attr($tid) . '"><td>' . esc_html( $tid ) . '</td><td>' . $created . '</td><td>' . $by_name . '</td><td>' . $expires . '</td><td>' . esc_html($scopes) . '</td><td>' . $last_used . '</td><td>' . $last_used_ip . '</td><td>' . $last_used_by_name . '</td><td><button type="button" class="button aisw-rotate-token">Rotate</button> <button type="button" class="button aisw-revoke-token">Revoke</button></td></tr>';
+        }
+    }
+    echo '</tbody></table>';
+
+    // Inline revoke confirmation modal (hidden) - uses CSS classes for styling/animation
+    echo '<div id="aisw_revoke_modal" class="aisw-modal" aria-hidden="true">';
+    echo '  <div class="aisw-modal__backdrop"></div>';
+    echo '  <div class="aisw-modal__dialog" role="dialog" aria-modal="true">';
+    echo '    <h2 class="aisw-modal__title">Revoke Token</h2>';
+    echo '    <p id="aisw_revoke_modal_text" class="aisw-modal__message">Are you sure you want to revoke this token? This action cannot be undone.</p>';
+    echo '    <div class="aisw-modal__details"></div>';
+    echo '    <div class="aisw-modal__actions">';
+    echo '      <button id="aisw_revoke_cancel" class="button">Cancel</button>';
+    echo '      <button id="aisw_revoke_confirm" class="button button-primary">Revoke Token</button>';
+    echo '    </div>';
+    echo '  </div>';
+    echo '</div>';
+}
+
+// AJAX: generate/reset mobile API key
+function aisw_ajax_generate_mobile_key() {
+    if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( ['message' => 'Unauthorized'] );
+    check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
+
+    try {
+        $token = bin2hex( random_bytes( 24 ) );
+    } catch ( Exception $e ) {
+        wp_send_json_error( ['message' => 'Failed to generate token.'] );
+    }
+
+    $expires_in_days = intval( $_POST['expires_in_days'] ?? 0 );
+    $scopes = isset($_POST['scopes']) && is_array($_POST['scopes']) ? array_map('sanitize_text_field', $_POST['scopes']) : ['generate', 'refine', 'posts'];
+    $tokens = get_option( 'aisw_mobile_api_tokens', array() );
+    $tid = bin2hex( random_bytes(6) ); // short id
+    $hash = password_hash( $token, PASSWORD_DEFAULT );
+    $created_at = current_time( 'mysql' );
+    $created_by = get_current_user_id();
+    $entry = array(
+        'hash' => $hash,
+        'created_at' => $created_at,
+        'created_by' => $created_by,
+        'scopes' => $scopes,
+    );
+    if ( $expires_in_days > 0 ) {
+        $expires_ts = current_time( 'timestamp' ) + ( $expires_in_days * DAY_IN_SECONDS );
+        $entry['expires_at'] = date( 'Y-m-d H:i:s', $expires_ts );
+    }
+    $tokens[ $tid ] = $entry;
+    update_option( 'aisw_mobile_api_tokens', $tokens );
+
+    $user = get_userdata( $created_by );
+    $created_by_name = $user ? $user->display_name : 'Unknown';
+
+    // Log the event
+    aisw_log_token_creation( array_merge(['token_id' => $tid], $entry) );
+
+    // one-time reveal, include metadata for immediate UI append
+    $response = array( 'token' => $token, 'token_id' => $tid, 'created_at' => $created_at, 'created_by' => $created_by_name, 'scopes' => $scopes );
+    if ( isset( $entry['expires_at'] ) ) $response['expires_at'] = $entry['expires_at'];
+    wp_send_json_success( $response );
+}
+add_action( 'wp_ajax_aisw_generate_mobile_key', 'aisw_ajax_generate_mobile_key' );
+
+// Revoke mobile API token
+function aisw_ajax_revoke_mobile_token() {
+    if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( ['message' => 'Unauthorized'] );
+    check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
+
+    $tid = sanitize_text_field( $_POST['token_id'] ?? '' );
+    if ( empty( $tid ) ) wp_send_json_error( ['message' => 'Missing token id'] );
+
+    $tokens = get_option( 'aisw_mobile_api_tokens', array() );
+    if ( isset( $tokens[ $tid ] ) ) {
+        unset( $tokens[ $tid ] );
+        update_option( 'aisw_mobile_api_tokens', $tokens );
+        aisw_log_token_revocation( $tid );
+        wp_send_json_success( ['message' => 'Token revoked'] );
+    }
+
+    wp_send_json_error( ['message' => 'Token not found'] );
+}
+add_action( 'wp_ajax_aisw_revoke_mobile_token', 'aisw_ajax_revoke_mobile_token' );
+
+// Return current mobile tokens metadata (for admin UI refresh)
+function aisw_ajax_get_mobile_tokens() {
+    if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( ['message' => 'Unauthorized'] );
+    check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
+
+    $tokens = get_option( 'aisw_mobile_api_tokens', array() );
+    $out = array();
+    foreach ( $tokens as $tid => $meta ) {
+        $created_by = isset($meta['created_by']) ? (get_userdata($meta['created_by']) ? get_userdata($meta['created_by'])->display_name : $meta['created_by']) : '';
+        $out[] = array(
+            'token_id' => $tid,
+            'created_at' => $meta['created_at'] ?? '',
+            'created_by' => $created_by,
+            'expires_at' => $meta['expires_at'] ?? '',
+            'scopes' => isset($meta['scopes']) && is_array($meta['scopes']) ? $meta['scopes'] : ['generate', 'refine', 'posts'],
+            'last_used_at' => $meta['last_used_at'] ?? '',
+            'last_used_ip' => $meta['last_used_ip'] ?? '',
+            'last_used_by' => isset($meta['last_used_by']) && $meta['last_used_by'] ? (get_userdata($meta['last_used_by']) ? get_userdata($meta['last_used_by'])->display_name : $meta['last_used_by']) : '',
+        );
+    }
+
+    wp_send_json_success( $out );
+}
+add_action( 'wp_ajax_aisw_get_mobile_tokens', 'aisw_ajax_get_mobile_tokens' );
+
+// Rotate mobile API token (generate new token for given token id)
+function aisw_ajax_rotate_mobile_token() {
+    if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( ['message' => 'Unauthorized'] );
+    check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
+
+    $tid = sanitize_text_field( $_POST['token_id'] ?? '' );
+    if ( empty( $tid ) ) wp_send_json_error( ['message' => 'Missing token id'] );
+
+    $tokens = get_option( 'aisw_mobile_api_tokens', array() );
+    if ( ! isset( $tokens[ $tid ] ) ) wp_send_json_error( ['message' => 'Token not found'] );
+
+    try {
+        $new_token = bin2hex( random_bytes(24) );
+    } catch ( Exception $e ) {
+        wp_send_json_error( ['message' => 'Failed to generate token.'] );
+    }
+
+    $tokens[ $tid ]['hash'] = password_hash( $new_token, PASSWORD_DEFAULT );
+    // update created/rotated metadata
+    $tokens[ $tid ]['rotated_at'] = current_time( 'mysql' );
+    $tokens[ $tid ]['rotated_by'] = get_current_user_id();
+    update_option( 'aisw_mobile_api_tokens', $tokens );
+
+    aisw_log_token_rotation( $tid );
+
+    wp_send_json_success( [ 'token' => $new_token, 'token_id' => $tid, 'rotated_at' => $tokens[$tid]['rotated_at'] ] );
+}
+add_action( 'wp_ajax_aisw_rotate_mobile_token', 'aisw_ajax_rotate_mobile_token' );
+
+// Core logic for pruning expired tokens.
+function aisw_perform_token_pruning() {
+    $tokens = get_option( 'aisw_mobile_api_tokens', array() );
+    $original_count = count( $tokens );
+    $unexpired_tokens = array();
+
+    foreach ( $tokens as $tid => $meta ) {
+        if ( isset( $meta['expires_at'] ) && $meta['expires_at'] ) {
+            $expires_ts = strtotime( $meta['expires_at'] );
+            if ( $expires_ts !== false && current_time( 'timestamp' ) > $expires_ts ) {
+                continue; // Expired, so we skip it, effectively removing it.
+            }
+        }
+        $unexpired_tokens[ $tid ] = $meta;
+    }
+
+    $pruned_count = $original_count - count( $unexpired_tokens );
+
+    if ( $pruned_count > 0 ) {
+        update_option( 'aisw_mobile_api_tokens', $unexpired_tokens );
+        aisw_log_token_pruning( $pruned_count, 'cron' );
+    }
+
+    return $pruned_count;
+}
+
+// AJAX: Prune expired mobile API tokens
+function aisw_ajax_prune_expired_tokens() {
+    if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( ['message' => 'Unauthorized'] );
+    check_ajax_referer( 'aisw_ajax_nonce', 'nonce' );
+
+    $pruned_count = aisw_perform_token_pruning();
+
+    wp_send_json_success( ['pruned_count' => $pruned_count] );
+}
+add_action( 'wp_ajax_aisw_prune_expired_tokens', 'aisw_ajax_prune_expired_tokens' );
 
 // --- 2. Main Page HTML Structure ---
 function aisw_main_page_html() {
@@ -370,3 +597,220 @@ function aisw_handle_process_bulk_queue() {
     wp_send_json_error(['status' => 'error', 'keyword' => $keyword, 'remaining' => count($bulk_data['queue'])]);
 }
 add_action( 'wp_ajax_aisw_process_bulk_queue', 'aisw_handle_process_bulk_queue' );
+
+// --- 5. REST API Endpoints (minimal) ---
+/**
+ * Permission check for REST endpoints.
+ * Accepts either:
+ * - a mobile API key sent in the X-AISW-API-KEY header that matches option 'aisw_mobile_api_key', OR
+ * - an authenticated user with 'edit_posts' capability.
+ */
+function aisw_rest_permission_check( WP_REST_Request $request ) {
+    // accept header in typical forms
+    $header_token = $request->get_header('x-aisw-api-key') ?: $request->get_header('X-AISW-API-KEY');
+    $tokens = get_option('aisw_mobile_api_tokens', array());
+    $route = $request->get_route();
+
+    if ( ! empty( $tokens ) && ! empty( $header_token ) ) {
+        foreach ( $tokens as $tid => $meta ) {
+            // Check scope
+            $scopes = isset($meta['scopes']) && is_array($meta['scopes']) ? $meta['scopes'] : ['generate', 'refine', 'posts']; // Default to all if not set
+            $endpoint = basename($route);
+            if (!in_array($endpoint, $scopes)) {
+                continue;
+            }
+
+            // ignore expired tokens
+            if ( isset( $meta['expires_at'] ) && $meta['expires_at'] ) {
+                $expires_ts = strtotime( $meta['expires_at'] );
+                if ( $expires_ts !== false && current_time( 'timestamp' ) > $expires_ts ) {
+                    continue;
+                }
+            }
+            if ( isset( $meta['hash'] ) && function_exists('password_verify') && password_verify( (string) $header_token, (string) $meta['hash'] ) ) {
+                // record last-used metadata for auditing
+                $tokens = get_option('aisw_mobile_api_tokens', array());
+                if ( isset( $tokens[ $tid ] ) ) {
+                    $tokens[ $tid ]['last_used_at'] = current_time( 'mysql' );
+                    $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '';
+                    $tokens[ $tid ]['last_used_ip'] = $ip;
+                    $tokens[ $tid ]['last_used_by'] = get_current_user_id() ?: 0;
+                    update_option( 'aisw_mobile_api_tokens', $tokens );
+                }
+                return true;
+            }
+        }
+    }
+
+    if ( is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
+        return true;
+    }
+
+    // Log failed attempt if token was provided but was invalid
+    if ( ! empty( $header_token ) ) {
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : 'unknown';
+        aisw_log_event( "Failed auth attempt. Route: {$route}. IP: {$ip}. Reason: Invalid or insufficient scope token." );
+    }
+
+    return new WP_Error( 'rest_forbidden', 'You are not authorized to use this endpoint.', array( 'status' => 401 ) );
+}
+
+function aisw_rest_generate( WP_REST_Request $request ) {
+    $topic = sanitize_text_field( $request->get_param('topic') );
+    $tone = sanitize_text_field( $request->get_param('tone') );
+    $audience = sanitize_text_field( $request->get_param('audience') );
+    $model = sanitize_text_field( $request->get_param('model') ?: 'default' );
+
+    if ( empty( $topic ) ) {
+        return new WP_Error( 'missing_topic', 'The "topic" parameter is required.', array( 'status' => 400 ) );
+    }
+
+    $prompt = "Write a comprehensive, SEO-optimized blog post about \"{$topic}\". Tone: {$tone}. Audience: {$audience}. Format output as a valid JSON object: {\"title\": \"...\", \"body\": \"...\"}";
+
+    $ai_response_json = aisw_call_llm_api( $prompt, $model );
+    if ( is_wp_error( $ai_response_json ) ) {
+        return new WP_Error( 'ai_error', $ai_response_json->get_error_message(), array( 'status' => 500 ) );
+    }
+
+    $content = json_decode( $ai_response_json, true );
+    if ( json_last_error() !== JSON_ERROR_NONE ) {
+        return new WP_Error( 'ai_parse_error', 'Failed to parse AI response. The model may have returned an invalid format.', array( 'status' => 500 ) );
+    }
+
+    $post_id = wp_insert_post( array(
+        'post_title'   => isset($content['title']) ? sanitize_text_field($content['title']) : wp_trim_words( wp_strip_all_tags( $content['body'] ?? '' ), 10 ),
+        'post_content' => isset($content['body']) ? wp_kses_post($content['body']) : '',
+        'post_status'  => 'draft',
+        'post_author'  => get_current_user_id() ?: 0,
+    ) );
+
+    if ( ! $post_id ) {
+        return new WP_Error( 'post_create_failed', 'Failed to create WordPress post.', array( 'status' => 500 ) );
+    }
+
+    return rest_ensure_response( array( 'post_id' => $post_id, 'edit_link' => get_edit_post_link( $post_id, 'raw' ) ) );
+}
+
+function aisw_rest_refine( WP_REST_Request $request ) {
+    $post_id = intval( $request->get_param('post_id') );
+    $action = sanitize_text_field( $request->get_param('action') );
+
+    if ( ! $post_id || ! $action ) {
+        return new WP_Error( 'missing_params', 'Both "post_id" and "action" are required.', array( 'status' => 400 ) );
+    }
+
+    $post = get_post( $post_id );
+    if ( ! $post ) {
+        return new WP_Error( 'post_not_found', 'Post not found.', array( 'status' => 404 ) );
+    }
+
+    $article_content = "Title: " . $post->post_title . "\n\nContent: " . wp_strip_all_tags( $post->post_content );
+    $prompts = array(
+        'generate_meta' => "Based on the article, write a compelling, SEO-optimized meta description under 160 characters.\n\n{$article_content}",
+        'generate_tags' => "Based on the article, suggest 5-7 relevant SEO tags, comma-separated.\n\n{$article_content}",
+        'generate_social' => "Based on the article, write a punchy X/Twitter teaser with 2-3 hashtags.\n\n{$article_content}",
+        'refine_newsletter' => "Summarize the article into an engaging email newsletter format.\n\n{$article_content}",
+        'refine_thread' => "Convert the article into a 5-part numbered Twitter/X thread.\n\n{$article_content}",
+        'refine_takeaways' => "Extract the key takeaways from the article as a bulleted list.\n\n{$article_content}",
+        'refine_video' => "Create a 2-minute video script outline based on the article.\n\n{$article_content}",
+    );
+
+    if ( ! isset( $prompts[ $action ] ) ) {
+        return new WP_Error( 'invalid_action', 'Invalid refine action specified.', array( 'status' => 400 ) );
+    }
+
+    $ai_response = aisw_call_llm_api( $prompts[ $action ], 'default', 250 );
+    if ( is_wp_error( $ai_response ) ) {
+        return new WP_Error( 'ai_error', $ai_response->get_error_message(), array( 'status' => 500 ) );
+    }
+
+    return rest_ensure_response( array( 'data' => $ai_response ) );
+}
+
+function aisw_rest_posts_search( WP_REST_Request $request ) {
+    $q = sanitize_text_field( $request->get_param('q') );
+    $posts = get_posts( array( 's' => $q, 'post_type' => 'post', 'post_status' => 'publish,draft', 'posts_per_page' => 10 ) );
+    $results = array_map( function( $p ) { return array( 'id' => $p->ID, 'title' => $p->post_title ); }, $posts );
+    return rest_ensure_response( $results );
+}
+
+function aisw_register_rest_routes() {
+    register_rest_route( 'aisw/v1', '/generate', array(
+        'methods' => 'POST',
+        'callback' => 'aisw_rest_generate',
+        'permission_callback' => 'aisw_rest_permission_check',
+    ) );
+
+    register_rest_route( 'aisw/v1', '/refine', array(
+        'methods' => 'POST',
+        'callback' => 'aisw_rest_refine',
+        'permission_callback' => 'aisw_rest_permission_check',
+    ) );
+
+    register_rest_route( 'aisw/v1', '/posts', array(
+        'methods' => 'GET',
+        'callback' => 'aisw_rest_posts_search',
+        'permission_callback' => 'aisw_rest_permission_check',
+    ) );
+}
+add_action( 'rest_api_init', 'aisw_register_rest_routes' );
+
+// --- 6. Cron Job for Automated Pruning ---
+if ( ! wp_next_scheduled( 'aisw_daily_prune_tokens_event' ) ) {
+    wp_schedule_event( time(), 'daily', 'aisw_daily_prune_tokens_event' );
+}
+add_action( 'aisw_daily_prune_tokens_event', 'aisw_perform_token_pruning' );
+
+// Add a deactivation hook to unschedule the event
+function aisw_deactivate() {
+    $timestamp = wp_next_scheduled( 'aisw_daily_prune_tokens_event' );
+    if ( $timestamp ) {
+        wp_unschedule_event( $timestamp, 'aisw_daily_prune_tokens_event' );
+    }
+}
+register_deactivation_hook( __FILE__, 'aisw_deactivate' );
+
+// --- 7. Audit Logging ---
+
+/**
+ * Writes a message to the plugin's log file.
+ *
+ * @param string $message The message to log.
+ */
+function aisw_log_event( $message ) {
+    $upload_dir = wp_upload_dir();
+    $log_file = $upload_dir['basedir'] . '/ai-seo-writer.log';
+    $timestamp = current_time( 'Y-m-d H:i:s' );
+    $log_entry = "[$timestamp] " . $message . "\n";
+    file_put_contents( $log_file, $log_entry, FILE_APPEND );
+}
+
+// Log token creation
+function aisw_log_token_creation( $data ) {
+    $scopes = isset($data['scopes']) ? implode(', ', $data['scopes']) : 'all';
+    $expires = isset($data['expires_at']) ? 'until ' . $data['expires_at'] : 'never';
+    $user = wp_get_current_user();
+    aisw_log_event( "Token '{$data['token_id']}' created by user '{$user->user_login}' (ID: {$user->ID}). Scopes: [{$scopes}]. Expires: {$expires}." );
+}
+
+// Log token revocation
+function aisw_log_token_revocation( $tid ) {
+    $user = wp_get_current_user();
+    aisw_log_event( "Token '{$tid}' revoked by user '{$user->user_login}' (ID: {$user->ID})." );
+}
+
+// Log token rotation
+function aisw_log_token_rotation( $tid ) {
+    $user = wp_get_current_user();
+    aisw_log_event( "Token '{$tid}' rotated by user '{$user->user_login}' (ID: {$user->ID})." );
+}
+
+// Log token pruning
+function aisw_log_token_pruning( $count, $context = 'manual' ) {
+    if ($context === 'cron') {
+        aisw_log_event( "Automated cron job pruned {$count} expired tokens." );
+    } else {
+        $user = wp_get_current_user();
+        aisw_log_event( "User '{$user->user_login}' (ID: {$user->ID}) manually pruned {$count} expired tokens." );
+    }
+}
