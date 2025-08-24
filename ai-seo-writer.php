@@ -217,13 +217,22 @@ function aisw_settings_page_html() {
 // --- 3. Enqueue Scripts & Styles ---
 function aisw_enqueue_admin_scripts( $hook ) {
     if ( strpos( $hook, 'ai_seo_writer' ) === false ) return;
-    wp_enqueue_style( 'aisw-admin-css', plugin_dir_url( __FILE__ ) . 'assets/admin.css', [], '3.3.0' );
-    wp_enqueue_script( 'aisw-admin-js', plugin_dir_url( __FILE__ ) . 'assets/admin.js', [ 'jquery' ], '3.3.0', true );
+    
+    // Enqueue jQuery and jQuery UI first
+    wp_enqueue_script( 'jquery' );
     wp_enqueue_script( 'jquery-ui-autocomplete' );
     wp_enqueue_style( 'jquery-ui-css', 'https://code.jquery.com/ui/1.14.1/themes/base/jquery-ui.min.css', [], '1.14.1' );
     wp_enqueue_script( 'jquery-ui-js', 'https://code.jquery.com/ui/1.14.1/jquery-ui.min.js', [ 'jquery' ], '1.14.1', true );
-    wp_enqueue_script( 'intro-js', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/intro.min.js', [], '8.3.2', true );
+    
+    // Enqueue Intro.js BEFORE our admin script
+    wp_enqueue_script( 'intro-js', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/intro.min.js', [ 'jquery' ], '8.3.2', true );
     wp_enqueue_style( 'intro-js-css', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/introjs.min.css', [], '8.3.2' );
+    
+    // Now enqueue our scripts with dependencies
+    wp_enqueue_style( 'aisw-admin-css', plugin_dir_url( __FILE__ ) . 'assets/admin.css', [], '3.3.0' );
+    wp_enqueue_script( 'aisw-admin-js', plugin_dir_url( __FILE__ ) . 'assets/admin.js', [ 'jquery', 'jquery-ui-autocomplete', 'intro-js' ], '3.3.0', true );
+    
+    // Localize script with AJAX data
     wp_localize_script( 'aisw-admin-js', 'aisw_ajax_obj', [
         'ajax_url' => admin_url( 'admin-ajax.php' ),
         'nonce'    => wp_create_nonce( 'aisw_ajax_nonce' ),
@@ -237,8 +246,6 @@ function aisw_enqueue_admin_scripts( $hook ) {
         ]
     ] );
 }
-add_action( 'admin_enqueue_scripts', 'aisw_enqueue_admin_scripts' );
-
 // --- 4. AJAX Handlers (Re-engineered for Multi-LLM) ---
 
 // Main API handler for both OpenAI and Gemini

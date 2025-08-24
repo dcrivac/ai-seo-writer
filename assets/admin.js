@@ -1,26 +1,39 @@
-// File: assets/admin.js
+// File: assets/admin.js - FIXED VERSION
 
 jQuery(document).ready(function($) {
     'use strict';
 
-    // --- Onboarding Tour with Intro.js ---
-    if (!localStorage.getItem('aisw_onboarding_shown')) {
-        introJs().setOptions({
-            steps: [
-                { element: '.nav-tab-wrapper', intro: 'Switch between Single Post, Bulk, and Refinery modes.' },
-                { element: '#article-topic', intro: 'Enter a specific topic for your article here.' },
-                { element: '#generate-article-btn', intro: 'Click to generate your SEO-optimized post!' },
-                { element: '.aisw-settings-form', intro: 'Configure your AI model and API keys in Settings.' }
-            ],
-            showProgress: true,
-            exitOnOverlayClick: true
-        }).start();
-        localStorage.setItem('aisw_onboarding_shown', 'true');
+    // --- Wait for Intro.js to load before initializing tour ---
+    function initializeOnboardingTour() {
+        if (typeof introJs !== 'undefined' && !localStorage.getItem('aisw_onboarding_shown')) {
+            // Check if we're on the main AI Writer page (not settings)
+            if ($('.nav-tab-wrapper').length > 0) {
+                introJs().setOptions({
+                    steps: [
+                        { element: '.nav-tab-wrapper', intro: 'Switch between Single Post, Bulk, and Refinery modes.' },
+                        { element: '#article-topic', intro: 'Enter a specific topic for your article here.' },
+                        { element: '#generate-article-btn', intro: 'Click to generate your SEO-optimized post!' }
+                    ],
+                    showProgress: true,
+                    exitOnOverlayClick: true
+                }).start();
+                localStorage.setItem('aisw_onboarding_shown', 'true');
+            }
+        }
     }
 
-    $('#aisw-restart-tour').on('click', () => {
-        localStorage.removeItem('aisw_onboarding_shown');
-        introJs().start();
+    // Wait a bit for external scripts to load, then initialize
+    setTimeout(initializeOnboardingTour, 1000);
+
+    // Restart tour button (with safety check)
+    $('#aisw-restart-tour').on('click', function(e) {
+        e.preventDefault();
+        if (typeof introJs !== 'undefined') {
+            localStorage.removeItem('aisw_onboarding_shown');
+            introJs().start();
+        } else {
+            alert('Intro.js is not loaded. Please refresh the page and try again.');
+        }
     });
 
     // --- Contextual Tooltips ---
@@ -68,14 +81,18 @@ jQuery(document).ready(function($) {
 
     // Real-Time Topic Suggestions (Autocomplete with example trending topics)
     const trendingTopics = ['SEO strategies 2025', 'AI content tools', 'Digital marketing trends', 'Sustainable living tips', 'Tech gadgets review'];
-    topicInput.autocomplete({
-        source: trendingTopics,
-        minLength: 0
-    }).focus(function() {
-        if (!$(this).val()) {
-            $(this).autocomplete('search', '');
-        }
-    });
+    
+    // Check if jQuery UI autocomplete is available
+    if ($.fn.autocomplete) {
+        topicInput.autocomplete({
+            source: trendingTopics,
+            minLength: 0
+        }).focus(function() {
+            if (!$(this).val()) {
+                $(this).autocomplete('search', '');
+            }
+        });
+    }
 
     function startProgress() {
         progressDiv.fadeIn(300);
@@ -83,22 +100,34 @@ jQuery(document).ready(function($) {
     function stopProgress() { progressDiv.fadeOut(300); }
 
     generateBtn.on('click', function() {
+        console.log('Generate button clicked'); // Debug log
+        
         if (!topicInput.val().trim()) {
             topicInput.addClass('error').attr('placeholder', aisw_ajax_obj.i18n.topic_required);
             setTimeout(() => topicInput.removeClass('error').attr('placeholder', 'e.g., The resurgence of vinyl in the digital age'), 3000);
             return;
         }
+        
         generateBtn.prop('disabled', true);
         startProgress();
+        
+        console.log('Sending AJAX request...'); // Debug log
+        
         $.post(aisw_ajax_obj.ajax_url, {
-            action: 'aisw_generate_article', nonce: aisw_ajax_obj.nonce,
-            topic: topicInput.val(), tone: $('#article-tone').val(), audience: $('#article-audience').val(),
+            action: 'aisw_generate_article', 
+            nonce: aisw_ajax_obj.nonce,
+            topic: topicInput.val(), 
+            tone: $('#article-tone').val(), 
+            audience: $('#article-audience').val(),
             model: llmSelector.val()
         }).done(response => {
+            console.log('AJAX Response:', response); // Debug log
+            
             if (response.success) {
                 currentPostId = response.data.post_id;
                 editPostLink.attr('href', response.data.edit_link);
                 localStorage.setItem('aisw_last_post', JSON.stringify({ post_id: response.data.post_id, title: response.data.title }));
+                
                 $.post(aisw_ajax_obj.ajax_url, { action: 'aisw_get_post_content', nonce: aisw_ajax_obj.nonce, post_id: currentPostId })
                 .done(contentResponse => {
                     if (contentResponse.success) {
@@ -106,14 +135,22 @@ jQuery(document).ready(function($) {
                         previewPane.fadeIn(300);
                     }
                 });
+                
                 step1.fadeOut(300, () => step2.fadeIn(300));
-                localStorage.removeItem('aisw_draft_topic'); // Clear draft on success
+                // Clear draft on success
+                localStorage.removeItem('aisw_draft_topic');
                 localStorage.removeItem('aisw_draft_tone');
                 localStorage.removeItem('aisw_draft_audience');
                 localStorage.removeItem('aisw_draft_model');
-            } else { alert('Error: ' + response.data.message); generateBtn.prop('disabled', false); }
-        }).fail(() => { alert('An unexpected error occurred.'); generateBtn.prop('disabled', false); })
-        .always(() => stopProgress());
+            } else { 
+                alert('Error: ' + response.data.message); 
+                generateBtn.prop('disabled', false); 
+            }
+        }).fail((xhr, status, error) => { 
+            console.log('AJAX Failed:', status, error, xhr.responseText); // Debug log
+            alert('An unexpected error occurred: ' + status); 
+            generateBtn.prop('disabled', false); 
+        }).always(() => stopProgress());
     });
 
     // Undo Generation
