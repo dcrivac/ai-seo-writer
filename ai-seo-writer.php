@@ -495,40 +495,53 @@ function aisw_handle_process_bulk_queue() {
 add_action( 'wp_ajax_aisw_process_bulk_queue', 'aisw_handle_process_bulk_queue' );
 ?>
 
+// Replace the debug function with this simpler version
+
 function aisw_debug_file_structure() {
     if ( ! current_user_can( 'manage_options' ) ) return;
     
     $plugin_dir = plugin_dir_path( __FILE__ );
     $plugin_url = plugin_dir_url( __FILE__ );
     
-    echo '<div class="notice notice-info"><p><strong>AISW Debug Info:</strong></p>';
-    echo '<p>Plugin Directory: ' . esc_html( $plugin_dir ) . '</p>';
-    echo '<p>Plugin URL: ' . esc_html( $plugin_url ) . '</p>';
-    
-    // Check if assets directory exists
-    $assets_dir = $plugin_dir . 'assets/';
-    echo '<p>Assets Directory Exists: ' . ( is_dir( $assets_dir ) ? 'YES' : 'NO' ) . '</p>';
-    
-    // Check individual files
-    $css_file = $assets_dir . 'admin.css';
-    $js_file = $assets_dir . 'admin.js';
-    
-    echo '<p>CSS File Exists: ' . ( file_exists( $css_file ) ? 'YES' : 'NO' ) . ' (' . esc_html( $css_file ) . ')</p>';
-    echo '<p>JS File Exists: ' . ( file_exists( $js_file ) ? 'YES' : 'NO' ) . ' (' . esc_html( $js_file ) . ')</p>';
-    
-    // List all files in plugin directory
-    if ( is_dir( $plugin_dir ) ) {
-        $files = scandir( $plugin_dir );
-        echo '<p>Files in plugin directory: ' . esc_html( implode( ', ', array_diff( $files, [ '.', '..' ] ) ) ) . '</p>';
-    }
-    
-    // List all files in assets directory (if it exists)
-    if ( is_dir( $assets_dir ) ) {
-        $asset_files = scandir( $assets_dir );
-        echo '<p>Files in assets directory: ' . esc_html( implode( ', ', array_diff( $asset_files, [ '.', '..' ] ) ) ) . '</p>';
-    }
-    
-    echo '</div>';
+    ?>
+    <div class="notice notice-info">
+        <p><strong>AISW Debug Info:</strong></p>
+        <p>Plugin Directory: <?php echo esc_html( $plugin_dir ); ?></p>
+        <p>Plugin URL: <?php echo esc_html( $plugin_url ); ?></p>
+        
+        <?php
+        // Check if assets directory exists
+        $assets_dir = $plugin_dir . 'assets/';
+        ?>
+        <p>Assets Directory Exists: <?php echo is_dir( $assets_dir ) ? 'YES' : 'NO'; ?></p>
+        
+        <?php
+        // Check individual files
+        $css_file = $assets_dir . 'admin.css';
+        $js_file = $assets_dir . 'admin.js';
+        ?>
+        <p>CSS File Exists: <?php echo file_exists( $css_file ) ? 'YES' : 'NO'; ?> (<?php echo esc_html( $css_file ); ?>)</p>
+        <p>JS File Exists: <?php echo file_exists( $js_file ) ? 'YES' : 'NO'; ?> (<?php echo esc_html( $js_file ); ?>)</p>
+        
+        <?php
+        // List all files in plugin directory
+        if ( is_dir( $plugin_dir ) ) {
+            $files = scandir( $plugin_dir );
+            $files = array_diff( $files, [ '.', '..' ] );
+        ?>
+        <p>Files in plugin directory: <?php echo esc_html( implode( ', ', $files ) ); ?></p>
+        <?php } ?>
+        
+        <?php
+        // List all files in assets directory (if it exists)
+        if ( is_dir( $assets_dir ) ) {
+            $asset_files = scandir( $assets_dir );
+            $asset_files = array_diff( $asset_files, [ '.', '..' ] );
+        ?>
+        <p>Files in assets directory: <?php echo esc_html( implode( ', ', $asset_files ) ); ?></p>
+        <?php } ?>
+    </div>
+    <?php
 }
 
 // Hook it to admin notices (temporary)
