@@ -216,27 +216,49 @@ function aisw_settings_page_html() {
 
 // --- 3. Enqueue Scripts & Styles ---
 function aisw_enqueue_admin_scripts( $hook ) {
+    // Only load on our plugin pages
     if ( strpos( $hook, 'ai_seo_writer' ) === false ) return;
+    
+    // Debug: Check if files exist
+    $css_path = plugin_dir_path( __FILE__ ) . 'assets/admin.css';
+    $js_path = plugin_dir_path( __FILE__ ) . 'assets/admin.js';
+    
+    error_log('AISW: CSS file exists: ' . (file_exists($css_path) ? 'YES' : 'NO') . ' at ' . $css_path);
+    error_log('AISW: JS file exists: ' . (file_exists($js_path) ? 'YES' : 'NO') . ' at ' . $js_path);
     
     // Enqueue jQuery and jQuery UI first
     wp_enqueue_script( 'jquery' );
     wp_enqueue_script( 'jquery-ui-autocomplete' );
+    
+    // Enqueue external dependencies
     wp_enqueue_style( 'jquery-ui-css', 'https://code.jquery.com/ui/1.14.1/themes/base/jquery-ui.min.css', [], '1.14.1' );
     wp_enqueue_script( 'jquery-ui-js', 'https://code.jquery.com/ui/1.14.1/jquery-ui.min.js', [ 'jquery' ], '1.14.1', true );
     
-    // Enqueue Intro.js BEFORE our admin script
-    wp_enqueue_script( 'intro-js', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/intro.min.js', [ 'jquery' ], '8.3.2', true );
-    wp_enqueue_style( 'intro-js-css', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/introjs.min.css', [], '8.3.2' );
+    // Only enqueue Intro.js on the main plugin page (not settings)
+    if ( $hook === 'toplevel_page_ai_seo_writer' ) {
+        wp_enqueue_script( 'intro-js', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/intro.min.js', [ 'jquery' ], '8.3.2', true );
+        wp_enqueue_style( 'intro-js-css', 'https://cdn.jsdelivr.net/npm/intro.js@8.3.2/min/introjs.min.css', [], '8.3.2' );
+    }
     
-    // Now enqueue our scripts with dependencies
-    wp_enqueue_style( 'aisw-admin-css', plugin_dir_url( __FILE__ ) . 'assets/admin.css', [], '3.3.0' );
-    wp_enqueue_script( 'aisw-admin-js', plugin_dir_url( __FILE__ ) . 'assets/admin.js', [ 'jquery', 'jquery-ui-autocomplete', 'intro-js' ], '3.3.0', true );
+    // Enqueue our plugin assets with proper URLs
+    $css_url = plugin_dir_url( __FILE__ ) . 'assets/admin.css';
+    $js_url = plugin_dir_url( __FILE__ ) . 'assets/admin.js';
+    
+    wp_enqueue_style( 'aisw-admin-css', $css_url, [], '3.3.1' ); // Bumped version to force refresh
+    
+    $dependencies = [ 'jquery', 'jquery-ui-autocomplete' ];
+    if ( $hook === 'toplevel_page_ai_seo_writer' ) {
+        $dependencies[] = 'intro-js';
+    }
+    
+    wp_enqueue_script( 'aisw-admin-js', $js_url, $dependencies, '3.3.1', true ); // Bumped version
     
     // Localize script with AJAX data
     wp_localize_script( 'aisw-admin-js', 'aisw_ajax_obj', [
         'ajax_url' => admin_url( 'admin-ajax.php' ),
         'nonce'    => wp_create_nonce( 'aisw_ajax_nonce' ),
         'default_llm' => get_option( 'aisw_default_llm', 'openai' ),
+        'hook' => $hook, // Debug info
         'i18n' => [
             'topic_required' => __( 'Topic is required!', 'ai-seo-writer' ),
             'keywords_limit' => __( 'Limit to 10 keywords for best performance.', 'ai-seo-writer' ),
@@ -245,6 +267,13 @@ function aisw_enqueue_admin_scripts( $hook ) {
             'copied' => __( 'Copied!', 'ai-seo-writer' ),
         ]
     ] );
+    
+    // Debug: Output file URLs to browser console
+    wp_add_inline_script( 'aisw-admin-js', 
+        'console.log("AISW CSS URL: ' . $css_url . '");' .
+        'console.log("AISW JS URL: ' . $js_url . '");' .
+        'console.log("AISW Hook: ' . $hook . '");'
+    );
 }
 // --- 4. AJAX Handlers (Re-engineered for Multi-LLM) ---
 
@@ -465,3 +494,42 @@ function aisw_handle_process_bulk_queue() {
 }
 add_action( 'wp_ajax_aisw_process_bulk_queue', 'aisw_handle_process_bulk_queue' );
 ?>
+
+function aisw_debug_file_structure() {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    
+    $plugin_dir = plugin_dir_path( __FILE__ );
+    $plugin_url = plugin_dir_url( __FILE__ );
+    
+    echo '<div class="notice notice-info"><p><strong>AISW Debug Info:</strong></p>';
+    echo '<p>Plugin Directory: ' . esc_html( $plugin_dir ) . '</p>';
+    echo '<p>Plugin URL: ' . esc_html( $plugin_url ) . '</p>';
+    
+    // Check if assets directory exists
+    $assets_dir = $plugin_dir . 'assets/';
+    echo '<p>Assets Directory Exists: ' . ( is_dir( $assets_dir ) ? 'YES' : 'NO' ) . '</p>';
+    
+    // Check individual files
+    $css_file = $assets_dir . 'admin.css';
+    $js_file = $assets_dir . 'admin.js';
+    
+    echo '<p>CSS File Exists: ' . ( file_exists( $css_file ) ? 'YES' : 'NO' ) . ' (' . esc_html( $css_file ) . ')</p>';
+    echo '<p>JS File Exists: ' . ( file_exists( $js_file ) ? 'YES' : 'NO' ) . ' (' . esc_html( $js_file ) . ')</p>';
+    
+    // List all files in plugin directory
+    if ( is_dir( $plugin_dir ) ) {
+        $files = scandir( $plugin_dir );
+        echo '<p>Files in plugin directory: ' . esc_html( implode( ', ', array_diff( $files, [ '.', '..' ] ) ) ) . '</p>';
+    }
+    
+    // List all files in assets directory (if it exists)
+    if ( is_dir( $assets_dir ) ) {
+        $asset_files = scandir( $assets_dir );
+        echo '<p>Files in assets directory: ' . esc_html( implode( ', ', array_diff( $asset_files, [ '.', '..' ] ) ) ) . '</p>';
+    }
+    
+    echo '</div>';
+}
+
+// Hook it to admin notices (temporary)
+add_action( 'admin_notices', 'aisw_debug_file_structure' );
